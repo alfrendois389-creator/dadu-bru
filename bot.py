@@ -474,10 +474,15 @@ async def deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def kirim_bukti_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    user_id = int(query.data.split("_")[2])
+
+    try:
+        user_id = int(query.data.split("_")[2])
+    except:
+        await query.edit_message_text("❌ DATA TIDAK VALID!")
+        return
+
     user = query.from_user
-    
+
     conn = get_db()
     c = conn.cursor()
     c.execute(
@@ -486,19 +491,19 @@ async def kirim_bukti_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     dep = c.fetchone()
     conn.close()
-    
+
     if not dep:
         await query.edit_message_text("❌ TIDAK ADA DEPOSIT PENDING!")
         return
-    
+
     await query.edit_message_text(
         f"📤 KIRIM FOTO BUKTI TRANSFER\n"
         f"👤 @{user.username}\n"
-        f"💰 {dep['amount']} KOIN (Rp {dep['amount']*KOIN_RATE:,.0f})"
+        f"💰 {dep['amount']} KOIN (Rp {dep['amount'] * KOIN_RATE:,.0f})"
     )
-    
-    user_states[user.id] = {"deposit_id": dep['id'], "amount": dep['amount']}
 
+    user_states[user.id] = {"deposit_id": dep['id'], "amount": dep['amount']}
+    
 async def handle_bukti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     state = user_states.get(user.id, {})

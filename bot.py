@@ -1,5 +1,5 @@
 # bot.py
-# BOT DADU DUEL — FULL FITUR + PAKASIR DEPOSIT
+# BOT DADU DUEL — FULL FITUR + PAKASIR QRIS (FIXED)
 
 import os
 import random
@@ -16,8 +16,10 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 BOT_TOKEN = "8986690043:AAFhRUhCU6acJQ3LtTroQ7z7DjBmg4V1kFQ"
 ADMIN_IDS = [8502398484]
 
+# PAKASIR CONFIG (FIX)
 PAKASIR_SLUG = "toko-dois"
-PAKASIR_API_KEY = os.getenv("PAKASIR_API_KEY") or "rTxR7Xpacg0IE6tZfZBWR2CscTtgrE08"
+PAKASIR_API_KEY = "rTxR7Xpacg0IE6tZfZBWR2CscTtgrE08"
+PAKASIR_URL = "https://app.pakasir.com/api/transactioncreate/qris"
 
 MIN_BET = 0.2
 MAX_BET = 100
@@ -107,25 +109,57 @@ def get_pending_wd():
     conn.close()
     return res
 
-# ==================== PAKASIR ====================
+# ==================== PAKASIR QRIS (FIXED) ====================
 async def generate_qris(amount, order_id):
-    url = "https://app.pakasir.com/api/transactioncreate/qris"
-    payload = {
-        "project": PAKASIR_SLUG,
-        "order_id": order_id,
-        "amount": amount,
-        "api_key": PAKASIR_API_KEY
-    }
+    """Generate QRIS dari Pakasir dengan error handling lengkap"""
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        data = response.json()
-        if response.status_code == 200:
-            return data.get("payment", {}).get("qr_content")
-        else:
-            print("❌ Pakasir Error:", data)
+        payload = {
+            "project": PAKASIR_SLUG,
+            "order_id": order_id,
+            "amount": int(amount),
+            "api_key": PAKASIR_API_KEY
+        }
+        
+        print(f"📤 Sending to Pakasir: {payload}")
+        
+        response = requests.post(
+            PAKASIR_URL,
+            json=payload,
+            timeout=15,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        print(f"📥 Response Status: {response.status_code}")
+        print(f"📥 Response Body: {response.text}")
+        
+        if response.status_code != 200:
+            print(f"❌ HTTP Error: {response.status_code}")
             return None
+        
+        data = response.json()
+        
+        # Cek apakah ada error dari Pakasir
+        if data.get("status") != 200 and data.get("status") != "success":
+            print(f"❌ Pakasir Error: {data.get('message', 'Unknown error')}")
+            return None
+        
+        # Ambil QR content
+        qr_content = data.get("payment", {}).get("qr_content")
+        if not qr_content:
+            print("❌ QR content not found in response")
+            return None
+        
+        print("✅ QRIS generated successfully!")
+        return qr_content
+        
+    except requests.exceptions.Timeout:
+        print("❌ Timeout: Pakasir tidak merespon")
+        return None
+    except requests.exceptions.ConnectionError:
+        print("❌ Connection Error: Gagal terhubung ke Pakasir")
+        return None
     except Exception as e:
-        print("❌ Error:", e)
+        print(f"❌ Error: {e}")
         return None
 
 # ==================== DATA TARUHAN ====================
@@ -347,11 +381,13 @@ async def rekap(update, context):
     msg += f"📌 TOTAL SEMUA: {total_k + total_b:.2f} KOIN"
     await update.message.reply_text(msg)
 
+# ==================== DEPOSIT QRIS (FIXED) ====================
 async def deposit(update, context):
     user = update.effective_user
     if len(context.args) < 1:
         await update.message.reply_text("❌ CONTOH: /deposit 1000")
         return
+    
     try:
         amount = int(context.args[0])
         if amount < 1000:
@@ -360,11 +396,18 @@ async def deposit(update, context):
     except:
         await update.message.reply_text("❌ JUMLAH HARUS ANGKA!")
         return
+    
+    # Kirim pesan "loading" dulu
+    loading_msg = await update.message.reply_text("⏳ SEDANG MEMBUAT QRIS...")
+    
     order_id = f"DEPO_{user.id}_{int(time.time())}"
     qr_content = await generate_qris(amount, order_id)
+    
     if not qr_content:
-        await update.message.reply_text("❌ GAGAL GENERATE QRIS! Coba lagi.")
+        await loading_msg.edit_text("❌ GAGAL GENERATE QRIS! Coba lagi nanti.")
         return
+    
+    # Buat QR Code
     qr = qrcode.QRCode(box_size=8, border=4)
     qr.add_data(qr_content)
     qr.make(fit=True)
@@ -372,10 +415,8 @@ async def deposit(update, context):
     bio = BytesIO()
     img.save(bio, 'PNG')
     bio.seek(0)
-    await update.message.reply_photo(
-        bio,
-        caption=f"💳 BAYAR KE QRIS\n💰 {amount:,} (Rp {amount:,})\n🆔 ORDER: {order_id}\n⏳ BATAS WAKTU: 15 MENIT"
-    )
+    
+    # Simpan ke database
     conn = get_db()
     c = conn.cursor()
     c.execute(
@@ -384,8 +425,21 @@ async def deposit(update, context):
     )
     conn.commit()
     conn.close()
-    await update.message.reply_text("✅ QRIS berhasil dibuat. Scan & bayar!")
+    
+    # Hapus loading message
+    await loading_msg.delete()
+    
+    # Kirim QRIS
+    await update.message.reply_photo(
+        bio,
+        caption=f"💳 BAYAR KE QRIS\n"
+                f"💰 Rp {amount:,}\n"
+                f"🆔 ORDER: {order_id}\n"
+                f"⏳ BATAS WAKTU: 15 MENIT\n\n"
+                f"📌 SCAN QRIS DI ATAS UNTUK MEMBAYAR"
+    )
 
+# ==================== WITHDRAW ====================
 async def withdraw(update, context):
     user = update.effective_user
     if len(context.args) < 1:

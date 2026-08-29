@@ -1108,6 +1108,7 @@ async def autooff(update, context):
 def main():
     init_db()
     app = Application.builder().token(BOT_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", start))
     app.add_handler(CommandHandler("balance", balance))
@@ -1121,11 +1122,11 @@ def main():
     app.add_handler(CommandHandler("cekwd", cekwd))
     app.add_handler(CommandHandler("confirm", confirm))
     app.add_handler(CommandHandler("reject", reject))
-    app.add_handler(CommandHandler("confirmdeposit", confirmdeposit))
     app.add_handler(CommandHandler("autoon", autoon))
     app.add_handler(CommandHandler("autooff", autooff))
     app.add_handler(CallbackQueryHandler(kirim_bukti_callback, pattern="kirim_bukti_"))
     app.add_handler(MessageHandler(filters.PHOTO, handle_bukti))
+    
     print("🤖 BOT DADU BERJALAN...")
     app.run_polling()
 

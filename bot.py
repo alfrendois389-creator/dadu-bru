@@ -16,7 +16,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 BOT_TOKEN = "8986690043:AAFhRUhCU6acJQ3LtTroQ7z7DjBmg4V1kFQ"
 ADMIN_IDS = [8502398484]
 
-# PAKASIR
 PAKASIR_SLUG = "toko-dois"
 PAKASIR_API_KEY = os.getenv("PAKASIR_API_KEY") or "rTxR7Xpacg0IE6tZfZBWR2CscTtgrE08"
 
